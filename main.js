@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const dotenv = require("dotenv");
-const { Pool } = require("pg"); // Alterado de Client para Pool
+const { Pool } = require("pg");
 
 dotenv.config();
 
@@ -64,6 +64,14 @@ const updateHandler = async (req, res) => {
 
 // Usar o handler para o endpoint
 app.get("/update", updateHandler);
+
+// Manter a conexão HTTP ativa, mesmo sem dados
+app.use((req, res, next) => {
+  // Manter conexão viva e sem timeout
+  res.setTimeout(0); // Disable timeout for the response
+  res.setHeader("Connection", "keep-alive"); // Instruir para manter a conexão ativa
+  next();
+});
 
 // Iniciar servidor
 app.listen(PORT, () => {
