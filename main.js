@@ -1,5 +1,4 @@
 const express = require("express");
-const axios = require("axios");
 const dotenv = require("dotenv");
 const { Pool } = require("pg");
 
@@ -19,8 +18,13 @@ const dbPool = new Pool({
   },
 });
 
-// Endpoint para receber dados do Raspberry Pi Pico W
-const updateHandler = async (req, res) => {
+// Endpoint raiz para testar se o servidor está rodando
+app.get("/", (req, res) => {
+  res.send("Servidor está rodando! 🚀");
+});
+
+// Endpoint para receber dados do Raspberry Pi Pico W e salvar no banco
+app.get("/update", async (req, res) => {
   try {
     const waterLevel = parseFloat(req.query.waterLevel);
     if (isNaN(waterLevel)) {
@@ -29,47 +33,44 @@ const updateHandler = async (req, res) => {
 
     console.log(`Recebendo nível de água: ${waterLevel} cm`);
 
-    // Usar uma conexão do pool para inserir os dados no banco
-    const query = "INSERT INTO water_level (level) VALUES ($1)";
+    // Inserir no banco de dados
+    const query = "INSERT INTO water_level (level, created_at) VALUES ($1, NOW())";
     const values = [waterLevel];
 
-    const client = await dbPool.connect(); // Pegar uma conexão do pool
+    const client = await dbPool.connect();
     try {
       await client.query(query, values);
       console.log("Dados inseridos no banco de dados.");
     } finally {
-      client.release(); // Liberar a conexão de volta para o pool
+      client.release();
     }
 
-    // Enviar dados para o Thinger.io via HTTP
-    await axios.post(
-      `https://backend.thinger.io/v3/users/${process.env.THINGER_USER}/devices/${process.env.THINGER_DEVICE}/callback/data`,
-      { value: waterLevel },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.THINGER_TOKEN}`,
-          Connection: "keep-alive", // Manter conexão HTTP ativa
-        },
-      }
-    );
-
-    console.log("Dados enviados ao Thinger.io.");
-    return res.status(200).send("Nível de água recebido, enviado ao banco de dados e ao Thinger.io.");
+    return res.status(200).send("Nível de água recebido e salvo no banco.");
   } catch (error) {
     console.error("Erro ao processar os dados:", error);
     return res.status(500).send("Erro interno do servidor.");
   }
-};
+});
 
-// Usar o handler para o endpoint
-app.get("/update", updateHandler);
+// Endpoint para buscar os últimos 100 registros do banco (para o Thinger.io)
+app.get("/data", async (req, res) => {
+  try {
+    const client = await dbPool.connect();
+    const query = "SELECT level, created_at FROM water_level ORDER BY created_at DESC LIMIT 100";
+    const result = await client.query(query);
+    client.release();
 
-// Manter a conexão HTTP ativa, mesmo sem dados
+    return res.json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar os dados:", error);
+    return res.status(500).send("Erro ao buscar dados do banco.");
+  }
+});
+
+// Manter a conexão HTTP ativa para evitar timeouts
 app.use((req, res, next) => {
-  // Manter conexão viva e sem timeout
-  res.setTimeout(0); // Disable timeout for the response
-  res.setHeader("Connection", "keep-alive"); // Instruir para manter a conexão ativa
+  res.setTimeout(0);
+  res.setHeader("Connection", "keep-alive");
   next();
 });
 
@@ -78,7 +79,7 @@ app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
 
-// Manter o pool ativo, tentando reconectar em caso de erro
+// Manter o pool ativo e tratar erros
 dbPool.on("error", (err) => {
   console.error("Erro no pool de conexões do PostgreSQL:", err);
 });
