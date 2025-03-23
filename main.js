@@ -34,7 +34,7 @@ app.get("/update", async (req, res) => {
     console.log(`Recebendo nível de água: ${waterLevel} cm`);
 
     // Inserir no banco de dados
-    const query = "INSERT INTO water_level (level, created_at) VALUES ($1, NOW())";
+    const query = "INSERT INTO water_level (level, timestamp) VALUES ($1, NOW())";
     const values = [waterLevel];
 
     const client = await dbPool.connect();
