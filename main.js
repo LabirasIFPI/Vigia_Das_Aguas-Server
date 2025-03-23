@@ -56,7 +56,7 @@ app.get("/update", async (req, res) => {
 app.get("/data", async (req, res) => {
   try {
     const client = await dbPool.connect();
-    const query = "SELECT level, created_at FROM water_level ORDER BY created_at DESC LIMIT 100";
+    const query = "SELECT level, timestamp FROM water_level ORDER BY created_at DESC LIMIT 100";
     const result = await client.query(query);
     client.release();
 
